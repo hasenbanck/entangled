@@ -1,0 +1,20 @@
+[package]
+name = "entangled"
+version = "1.0.0"
+edition = "2018"
+authors = [
+    "Bevy Contributors <bevyengine@gmail.com>",
+    "Lachlan Sneff <lachlan.sneff@gmail.com>",
+    "Philip Degarmo <aclysma@gmail.com>",
+    "Nils Hasenbanck <nils@hasenbanck.de>",
+]
+description = "A simple fork-join task executor."
+homepage = "https://github.com/hasenbanck/entangled"
+repository = "https://github.com/hasenbanck/entangled"
+license = "MIT"
+keywords = ["async", "task", "scoped"]
+
+[dependencies]
+futures-lite = "1.11"
+async-executor = "1.4"
+async-channel = "1.6"
