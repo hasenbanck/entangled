@@ -18,3 +18,15 @@ keywords = ["async", "task", "scoped"]
 futures-lite = "1.11"
 async-executor = "1.4"
 async-channel = "1.6"
+
+[dev-dependencies]
+criterion = "0.3"
+rayon = "1.5"
+
+[profile.bench]
+codegen-units = 1
+lto = true
+
+[[bench]]
+name = "scoped"
+harness = false
