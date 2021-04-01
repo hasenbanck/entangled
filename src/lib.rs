@@ -26,14 +26,14 @@
 //!
 //! assert_eq!(output.iter().sum::<i32>(), count.load(std::sync::atomic::Ordering::Relaxed));
 //! ```
-mod slice;
+
+#[doc(no_inline)]
+pub use async_executor::Task;
+
+pub use iter::ParallelIterator;
 pub use slice::{ParallelSlice, ParallelSliceMut};
-
-mod task;
-pub use task::Task;
-
-mod task_pool;
 pub use task_pool::{Scope, TaskPool, TaskPoolDescriptor};
 
 mod iter;
-pub use iter::ParallelIterator;
+mod slice;
+mod task_pool;

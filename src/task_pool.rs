@@ -192,17 +192,7 @@ impl TaskPool {
     where
         T: Send + 'static,
     {
-        Task::new(self.executor.spawn(future))
-    }
-
-    /// Spawns a static future onto the local executor. The returned `Task` is a future. It can also
-    /// be cancelled and "detached" allowing it to continue running without having to be polled by
-    /// the end-user.
-    pub fn spawn_local<T>(&self, future: impl Future<Output = T> + 'static) -> Task<T>
-    where
-        T: 'static,
-    {
-        Task::new(TaskPool::LOCAL_EXECUTOR.with(|executor| executor.spawn(future)))
+        self.executor.spawn(future)
     }
 }
 
@@ -240,9 +230,10 @@ impl<'scope, T: Send + 'scope> Scope<'scope, T> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
     use std::sync::Barrier;
+
+    use super::*;
 
     #[test]
     pub fn test_spawn() {
@@ -355,5 +346,14 @@ mod tests {
         barrier.wait();
         assert!(!thread_check_failed.load(Ordering::Acquire));
         assert_eq!(count.load(Ordering::Acquire), 200);
+    }
+
+    #[test]
+    pub fn test_task_spawn() {
+        let pool = TaskPool::default();
+
+        let task = pool.spawn(async { 42 });
+
+        assert_eq!(future::block_on(task), 42);
     }
 }

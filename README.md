@@ -12,15 +12,17 @@ This library makes no attempt to ensure fairness or ordering of spawned tasks.
 This is a hard fork of the [bevy_tasks](https://crates.io/crates/bevy_tasks) crate, to further
 reduce dependencies and simplify the crate.
 
+Builds on the [async-executor](https://crates.io/crates/async-executor) crate.
+
 ## Example
 
 ```rust
-let pool = entangled::TaskPool::default();
+let pool = entangled::TaskPool::default ();
 
 let count = std::sync::atomic::AtomicI32::new(0);
-let ref_count = &count;
+let ref_count = & count;
 
-let output = pool.scope(|scope| {
+let output = pool.scope( | scope| {
     for _ in 0..100 {
         scope.spawn(async {
             ref_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
