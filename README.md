@@ -15,21 +15,27 @@ completed.
 ## Example
 
 ```rust
-let pool = entangled::TaskPool::default ();
+use entangled::*;
+use std::sync::atomic::*;
 
-let count = std::sync::atomic::AtomicI32::new(0);
-let ref_count = & count;
+fn main() {
+    let pool = ThreadPool::new(
+        ThreadPoolDescriptor::default()
+    ).expect("can't create task pool");
 
-let output = pool.scope( | scope| {
-for _ in 0..100 {
-scope.spawn(async {
-ref_count.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-1
-});
+    let counter = AtomicI32::new(0);
+    let ref_counter = &counter;
+
+    pool.scope(|scope| {
+        for _ in 0..10 {
+            scope.spawn(async {
+                ref_counter.fetch_add(1, Ordering::Relaxed);
+            });
+        }
+    });
+
+    assert_eq!(counter.load(Ordering::Relaxed), 10);
 }
-});
-
-assert_eq!(output.iter().sum::<i32>(), count.load(std::sync::atomic::Ordering::Relaxed));
 ```
 
 ## Credits
