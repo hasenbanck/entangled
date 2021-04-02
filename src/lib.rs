@@ -79,7 +79,7 @@ impl Drop for ThreadPoolInner {
     }
 }
 
-/// A thread pool for executing futures.
+/// A thread pool for executing futures. Can be freely cloned.
 ///
 /// Drives futures given to the tasks pool to completion.
 #[derive(Debug, Clone)]
