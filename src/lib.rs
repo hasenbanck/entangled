@@ -35,16 +35,25 @@ use std::sync::Arc;
 pub use async_executor::Task;
 
 /// Describes how a `ThreadPool` should be created.
-#[derive(Debug, Clone)]
 pub struct ThreadPoolDescriptor {
     /// Spawns at most n threads for the thread pool. Default: 2.
     pub num_threads: usize,
+
     /// The stack size of the spawned threads. Default: 2 MiB.
     pub stack_size: usize,
+
     /// Name of the threads. Threads will be named:
     /// {thread_name} ({thread index}), i.e. "Thread pool (0)"
     /// Default: "Thread pool"
     pub thread_name: String,
+
+    /// Closure invoked on worker thread start. Closure parameter contains the index of the created thread.
+    /// Default: None
+    pub start_handler: Option<Box<dyn Fn(usize) + Send + Sync>>,
+
+    /// Closure invoked on worker thread exit. Closure parameter contains the index of the created thread.
+    /// Default: None
+    pub exit_handler: Option<Box<dyn Fn(usize) + Send + Sync>>,
 }
 
 impl Default for ThreadPoolDescriptor {
@@ -53,6 +62,8 @@ impl Default for ThreadPoolDescriptor {
             num_threads: 2,
             stack_size: 2 * 1024 * 1024,
             thread_name: "Thread pool".to_owned(),
+            start_handler: None,
+            exit_handler: None,
         }
     }
 }
@@ -79,9 +90,9 @@ impl Drop for ThreadPoolInner {
     }
 }
 
-/// A thread pool for executing futures. Can be freely cloned.
+/// A thread pool for executing futures.
 ///
-/// Drives futures given to the tasks pool to completion.
+/// Drives given futures to completion.
 #[derive(Debug, Clone)]
 pub struct ThreadPool {
     executor: Arc<async_executor::Executor<'static>>,
@@ -89,24 +100,52 @@ pub struct ThreadPool {
 }
 
 impl ThreadPool {
-    /// Create a new `ThreadPool`.
+    /// Create a new `ThreadPool`. Thread pools can be freely cloned.
+    ///
+    /// # How to provide a custom handler
+    ///
+    /// ```rust
+    /// use entangled::*;
+    ///
+    /// let descriptor = ThreadPoolDescriptor {
+    ///     num_threads: 0,
+    ///     start_handler: Some(Box::new(|index| {
+    ///         println!("Thread {} is starting", index);
+    ///     })),
+    ///     ..Default::default()
+    /// };
+    ///
+    /// let pool = ThreadPool::new(descriptor).unwrap();
+    /// ```
+    ///
     pub fn new(descriptor: ThreadPoolDescriptor) -> Result<Self, std::io::Error> {
         let (shutdown_tx, shutdown_rx) = async_channel::unbounded::<()>();
 
         let executor = Arc::new(async_executor::Executor::new());
         let mut threads = Vec::with_capacity(descriptor.num_threads);
 
-        for i in 0..descriptor.num_threads {
-            let ex = Arc::clone(&executor);
-            let shutdown_rx = shutdown_rx.clone();
+        let descriptor = Arc::new(descriptor);
 
+        for i in 0..descriptor.num_threads {
+            let thread_descriptor = descriptor.clone();
+            let thread_executor = Arc::clone(&executor);
             let thread_name = format!("{} ({})", descriptor.thread_name, i);
+            let thread_shutdown_rx = shutdown_rx.clone();
 
             let mut thread_builder = std::thread::Builder::new().name(thread_name);
             thread_builder = thread_builder.stack_size(descriptor.stack_size);
 
             let thread = thread_builder.spawn(move || {
-                let shutdown_future = ex.run(shutdown_rx.recv());
+                if let Some(start_handler) = &thread_descriptor.start_handler {
+                    start_handler(i)
+                }
+
+                let shutdown_future = thread_executor.run(thread_shutdown_rx.recv());
+
+                if let Some(exit_handler) = &thread_descriptor.exit_handler {
+                    exit_handler(i)
+                }
+
                 // We expect an async_channel::TryRecvError::Closed
                 futures_lite::future::block_on(shutdown_future).unwrap_err();
             })?;
@@ -253,6 +292,32 @@ mod tests {
 
         assert_eq!(outputs.len(), 100);
         assert_eq!(counter.load(Ordering::Relaxed), 100);
+    }
+
+    #[test]
+    pub fn test_custom_handler() {
+        let start_counter = Arc::new(AtomicI32::new(0));
+        let thread_start_counter = start_counter.clone();
+
+        let exit_counter = Arc::new(AtomicI32::new(0));
+        let thread_exit_counter = exit_counter.clone();
+
+        let _ = ThreadPool::new(ThreadPoolDescriptor {
+            num_threads: 5,
+            start_handler: Some(Box::new(move |_| {
+                thread_start_counter.fetch_add(1, Ordering::SeqCst);
+            })),
+            exit_handler: Some(Box::new(move |_| {
+                thread_exit_counter.fetch_add(1, Ordering::SeqCst);
+            })),
+            ..Default::default()
+        })
+        .unwrap();
+
+        std::thread::sleep(std::time::Duration::from_millis(50));
+
+        assert_eq!(start_counter.load(Ordering::SeqCst), 5);
+        assert_eq!(exit_counter.load(Ordering::SeqCst), 5);
     }
 
     #[test]
